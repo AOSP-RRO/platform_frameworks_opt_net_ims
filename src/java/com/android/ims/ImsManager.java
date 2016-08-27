@@ -67,6 +67,7 @@ public class ImsManager {
     public static final int PROPERTY_DBG_VT_AVAIL_OVERRIDE_DEFAULT = 0;
     public static final String PROPERTY_DBG_WFC_AVAIL_OVERRIDE = "persist.dbg.wfc_avail_ovr";
     public static final int PROPERTY_DBG_WFC_AVAIL_OVERRIDE_DEFAULT = 0;
+    public static final String PROPERTY_VOLTE_CALL_CAPABLE = "net.lte.volte_call_capable";
 
     /**
      * For accessing the IMS related service.
@@ -258,16 +259,40 @@ public class ImsManager {
                 && isGbaValid(context);
     }
 
+    /**
+     * Indicates whether Volte call capable.
+     */
+    public static boolean isVolteCallCapable() {
+        boolean isVolteCallCapable = SystemProperties.getBoolean(PROPERTY_VOLTE_CALL_CAPABLE, false);
+        if (DBG) log("isVolteCallCapable: " + isVolteCallCapable);
+
+        return isVolteCallCapable;
+    }
+
+    /**
+     * Sets property to indicate whether Volte call is capable.
+     */
+    public static void setVolteCallCapability(boolean enabled) {
+        if (DBG) log("setVolteCallCapability: " + enabled);
+        SystemProperties.set(PROPERTY_VOLTE_CALL_CAPABLE, Boolean.toString(enabled));
+    }
+
     /*
      * Indicates whether VoLTE is provisioned on device
      */
     public static boolean isVolteProvisionedOnDevice(Context context) {
+        return isVolteProvisionedOnDevice(context, SubscriptionManager.getDefaultVoicePhoneId());
+    }
+
+    /**
+     * @hide
+     */
+    public static boolean isVolteProvisionedOnDevice(Context context, int phoneId) {
         boolean isProvisioned = true;
         if (getBooleanCarrierConfig(context,
-                    CarrierConfigManager.KEY_CARRIER_VOLTE_PROVISIONING_REQUIRED_BOOL)) {
+                CarrierConfigManager.KEY_CARRIER_VOLTE_PROVISIONING_REQUIRED_BOOL)) {
             isProvisioned = false; // disable on any error
-            ImsManager mgr = ImsManager.getInstance(context,
-                    SubscriptionManager.getDefaultVoicePhoneId());
+            ImsManager mgr = ImsManager.getInstance(context, phoneId);
             if (mgr != null) {
                 try {
                     ImsConfig config = mgr.getConfigInterface();
@@ -333,8 +358,8 @@ public class ImsManager {
 
                 if (enabled) {
                     imsManager.turnOnIms();
-                } else if (context.getResources().getBoolean(
-                        com.android.internal.R.bool.imsServiceAllowTurnOff) && (
+                } else if (getBooleanCarrierConfig(context,
+                        CarrierConfigManager.KEY_CARRIER_ALLOW_TURNOFF_IMS_BOOL) && (
                         !isVolteEnabledByPlatform(context)
                         || !isEnhanced4gLteModeSettingEnabledByUser(context))) {
                     log("setVtSetting() : imsServiceAllowTurnOff -> turnOffIms");
@@ -1236,11 +1261,33 @@ public class ImsManager {
         }
 
         @Override
+        public void registrationConnected() {
+            if (DBG) {
+                log("registrationConnected ::");
+            }
+
+            if (mListener != null) {
+                mListener.onImsConnected();
+            }
+        }
+
+        @Override
         public void registrationProgressing(int imsRadioTech) {
             // Note: imsRadioTech value maps to RIL_RADIO_TECHNOLOGY
             //       values in ServiceState.java.
             if (DBG) {
                 log("registrationProgressing :: imsRadioTech=" + imsRadioTech);
+            }
+
+            if (mListener != null) {
+                mListener.onImsProgressing();
+            }
+        }
+
+        @Override
+        public void registrationProgressing() {
+            if (DBG) {
+                log("registrationProgressing ::");
             }
 
             if (mListener != null) {
